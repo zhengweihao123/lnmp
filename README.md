@@ -124,7 +124,7 @@ mysql -u root -p -e "SHOW MASTER STATUS;"
 # 记录 File 和 Position，Web2 配置从库时需要用到
 ```
 
-![image-20260604110351143](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110351143.png)
+![](./image-20260604110351143.png)
 
 #### 3. 安装 LNMP 环境
 
@@ -225,7 +225,7 @@ nginx -t
 systemctl restart nginx
 ```
 
-![image-20260604110454615](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110454615.png)
+![](./image-20260604110454615.png)
 
 ### 第三阶段：Web2 (192.168.19.133) 部署 — NFS Client + DB Slave + LNMP
 
@@ -247,7 +247,7 @@ mount -a
 df -h | grep wordpress
 ```
 
-![image-20260604110639132](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110639132.png)
+![](./image-20260604110639132.png)
 
 #### 2. 安装 MySQL 8.0 (从库)
 
