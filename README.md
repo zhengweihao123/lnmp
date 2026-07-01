@@ -1923,7 +1923,7 @@ mysqlbinlog \
 | :------- | :------------- | :----------------------------------------------------------- |
 | **LB**   | 10.1.0.5 | Nginx **负载均衡** + **Loki + Grafana 服务端**               |
 | **Web1** | 10.1.4.16 | LNMP + WordPress + MySQL 主 + NFS 服务端 + **Promtail 采集** |
-| **Web2** | 192.168.19.133 | LNMP + WordPress + MySQL 从 + NFS 客户端 + **Promtail 采集** |
+| **Web2** | 10.1.4.5 | LNMP + WordPress + MySQL 从 + NFS 客户端 + **Promtail 采集** |
 
 #### 一、LB 节点部署 Loki + Grafana（10.1.0.5）
 
@@ -2059,7 +2059,7 @@ EOF
 curl -s http://localhost:3100/ready
 ```
 
-#### 二、Web1/Web2 部署 Promtail（10.1.4.16 / 192.168.19.133）
+#### 二、Web1/Web2 部署 Promtail（10.1.4.16 / 10.1.4.5）
 
 ### 10.1.4.16
 
@@ -2185,7 +2185,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now promtail
 ```
 
-### 192.168.19.133
+### 10.1.4.5
 
 #### 1. 安装（同上）
 
@@ -2422,7 +2422,7 @@ sum(rate({job="nginx", log_type="access"} | json | status="5.."[1m])) by (host)
 | :------- | :------------- | :-------------------- | :------------------------------------- |
 | **LB**   | 10.1.0.5 | Zabbix Server + Agent | Nginx 活动连接、系统指标               |
 | **Web1** | 10.1.4.16 | Zabbix Agent          | Nginx、MySQL 主库、WordPress、系统指标 |
-| **Web2** | 192.168.19.133 | Zabbix Agent          | Nginx、MySQL 从库、WordPress、系统指标 |
+| **Web2** | 10.1.4.5 | Zabbix Agent          | Nginx、MySQL 从库、WordPress、系统指标 |
 
 #### 一、Zabbix Server 部署（LB 节点 10.1.0.5）
 
@@ -2565,7 +2565,7 @@ AllowKey=system.run[*]
 EOF
 ```
 
-**Web2 (192.168.19.133)**：
+**Web2 (10.1.4.5)**：
 
 ```
 sudo tee /etc/zabbix/zabbix_agent2.conf <<'EOF'
@@ -2683,7 +2683,7 @@ sudo dnf install -y zabbix-get
 # 测试获取数据
 zabbix_get -s 10.1.4.16 -k nginx.active
 zabbix_get -s 10.1.4.16 -k nginx.reading
-zabbix_get -s 192.168.19.133 -k nginx.active
+zabbix_get -s 10.1.4.5 -k nginx.active
 ```
 
 ![image-20260612100051541](image-20260612100051541.png)
@@ -2745,8 +2745,8 @@ sudo systemctl restart zabbix-agent2
 ##### 4. 测试
 
 ```
-zabbix_get -s 192.168.19.133 -k mysql.slave_delay
-zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
+zabbix_get -s 10.1.4.5 -k mysql.slave_delay
+zabbix_get -s 10.1.4.5 -k mysql.slave_io_running
 ```
 
 ![image-20260612101618680](image-20260612101618680.png)
@@ -2761,7 +2761,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 | :---------- | :---------- | :------------ | :------------------- |
 | lb-server   | LB 负载均衡 | Linux servers | 10.1.0.5:10050 |
 | web1-server | Web1 主库   | Linux servers | 10.1.4.16:10050 |
-| web2-server | Web2 从库   | Linux servers | 192.168.19.133:10050 |
+| web2-server | Web2 从库   | Linux servers | 10.1.4.5:10050 |
 
 模板选择：** Linux by Zabbix agent**
 
