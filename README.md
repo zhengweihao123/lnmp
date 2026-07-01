@@ -21,9 +21,9 @@ hostnamectl set-hostname web2-server
 
 # 配置 hosts（三台都执行）
 cat >> /etc/hosts <<EOF
-192.168.19.130 lb-server
-192.168.19.131 web1-server
-192.168.19.133 web2-server
+10.1.0.5 lb-server
+10.1.4.16 web1-server
+10.1.4.5 web2-server
 EOF
 
 # 关闭防火墙或开放必要端口（此处选择关闭防火墙简化，生产建议精细化开放）
@@ -45,7 +45,7 @@ systemctl enable chronyd --now
 timedatectl set-timezone Asia/Shanghai
 ```
 
-### 第二阶段：Web1 (192.168.19.131) 部署 — NFS Server + DB Master + LNMP
+### 第二阶段：Web1 (10.1.4.16) 部署 — NFS Server + DB Master + LNMP
 
 #### 1. 安装 NFS Server
 
@@ -58,7 +58,7 @@ chmod 755 /data/wordpress
 
 # 配置 NFS 导出
 cat > /etc/exports <<EOF
-/data/wordpress 192.168.19.133(rw,sync,no_root_squash,no_all_squash)
+/data/wordpress 10.1.4.5(rw,sync,no_root_squash,no_all_squash)
 EOF
 
 # 启动服务
@@ -87,13 +87,13 @@ mysql -u root -p
 ```
 -- 创建 WordPress 数据库和用户
 CREATE DATABASE wordpress CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'wpuser'@'192.168.19.%' IDENTIFIED WITH mysql_native_password BY 'YourStrongPassword123!';
-GRANT ALL PRIVILEGES ON wordpress.* TO 'wpuser'@'192.168.19.%';
+CREATE USER 'wpuser'@'%' IDENTIFIED WITH mysql_native_password BY 'YourStrongPassword123!';
+GRANT ALL PRIVILEGES ON wordpress.* TO 'wpuser'@'%';
 FLUSH PRIVILEGES;
 
 -- 配置主库
-CREATE USER 'repl'@'192.168.19.133' IDENTIFIED WITH mysql_native_password BY 'ReplStrongPassword456!';
-GRANT REPLICATION SLAVE ON *.* TO 'repl'@'192.168.19.133';
+CREATE USER 'repl'@'10.1.4.5' IDENTIFIED WITH mysql_native_password BY 'ReplStrongPassword456!';
+GRANT REPLICATION SLAVE ON *.* TO 'repl'@'10.1.4.5';
 FLUSH PRIVILEGES;
 
 -- 查看主库状态，记录 File 和 Position
@@ -124,7 +124,7 @@ mysql -u root -p -e "SHOW MASTER STATUS;"
 # 记录 File 和 Position，Web2 配置从库时需要用到
 ```
 
-![](./image-20260604110351143.png)
+![image-20260604110351143](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110351143.png)
 
 #### 3. 安装 LNMP 环境
 
@@ -160,7 +160,7 @@ cat > wp-config.php <<EOF
 define( 'DB_NAME', 'wordpress' );
 define( 'DB_USER', 'wpuser' );
 define( 'DB_PASSWORD', 'YourStrongPassword123!' );
-define( 'DB_HOST', '192.168.19.131' );
+define( 'DB_HOST', '10.1.4.16' );
 define( 'DB_CHARSET', 'utf8mb4' );
 define( 'DB_COLLATE', 'utf8mb4_unicode_ci' );
 
@@ -194,7 +194,7 @@ EOF
 cat > /etc/nginx/conf.d/wordpress.conf <<EOF
 server {
     listen 80;
-    server_name 192.168.19.131;
+    server_name 10.1.4.16;
     root /data/wordpress;
     index index.php index.html;
 
@@ -225,9 +225,9 @@ nginx -t
 systemctl restart nginx
 ```
 
-![](./image-20260604110454615.png)
+![image-20260604110454615](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110454615.png)
 
-### 第三阶段：Web2 (192.168.19.133) 部署 — NFS Client + DB Slave + LNMP
+### 第三阶段：Web2 (10.1.4.5) 部署 — NFS Client + DB Slave + LNMP
 
 #### 1. 挂载 NFS 共享目录
 
@@ -239,7 +239,7 @@ mkdir -p /data/wordpress
 
 # 配置开机自动挂载
 cat >> /etc/fstab <<EOF
-192.168.19.131:/data/wordpress /data/wordpress nfs defaults,_netdev 0 0
+10.1.4.16:/data/wordpress /data/wordpress nfs defaults,_netdev 0 0
 EOF
 
 # 立即挂载
@@ -247,7 +247,7 @@ mount -a
 df -h | grep wordpress
 ```
 
-![](./image-20260604110639132.png)
+![image-20260604110639132](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110639132.png)
 
 #### 2. 安装 MySQL 8.0 (从库)
 
@@ -278,7 +278,7 @@ systemctl restart mysqld
 ```
 mysql -u root -p
 CHANGE MASTER TO
-    MASTER_HOST='192.168.19.131',
+    MASTER_HOST='10.1.4.16',
     MASTER_USER='repl',
     MASTER_PASSWORD='ReplStrongPassword456!',
     MASTER_LOG_FILE='mysql-bin.000001',   -- 替换为实际 File
@@ -290,7 +290,7 @@ SHOW SLAVE STATUS\G
 EXIT;
 ```
 
-![](./image-20260604110938011.png)
+![image-20260604110938011](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110938011.png)
 
 #### 3. 安装 LNMP 环境（与 Web1 相同）
 
@@ -310,7 +310,7 @@ systemctl enable nginx php-fpm --now
 cat > /etc/nginx/conf.d/wordpress.conf <<EOF
 server {
     listen 80;
-    server_name 192.168.19.133;
+    server_name 10.1.4.5;
     root /data/wordpress;
     index index.php index.html;
 
@@ -340,7 +340,7 @@ nginx -t
 systemctl restart nginx
 ```
 
-### 第四阶段：负载均衡器 (192.168.19.130) 部署
+### 第四阶段：负载均衡器 (10.1.0.5) 部署
 
 ```
 dnf install -y nginx
@@ -373,8 +373,8 @@ http {
     # 负载均衡 upstream
     upstream wordpress_backend {
         # 轮询算法（默认），可改为 least_conn 或 ip_hash
-        server 192.168.19.131:80 weight=5 max_fails=3 fail_timeout=30s;
-        server 192.168.19.133:80 weight=5 max_fails=3 fail_timeout=30s;
+        server 10.1.4.16:80 weight=5 max_fails=3 fail_timeout=30s;
+        server 10.1.4.5:80 weight=5 max_fails=3 fail_timeout=30s;
     }
 
     server {
@@ -412,7 +412,7 @@ systemctl enable nginx --now
 
 #### 1. 通过浏览器访问负载均衡器
 
-打开浏览器访问 `http://192.168.19.130`，按向导完成 WordPress 安装。
+打开浏览器访问 `http://10.1.0.5`，按向导完成 WordPress 安装。
 
 #### 2. 验证 NFS 同步
 
@@ -433,20 +433,20 @@ mysql -u root -p -e "USE wordpress; SHOW TABLES;"
 mysql -u root -p -e "SHOW SLAVE STATUS\G" | grep "Running"
 ```
 
-![](./image-20260604112537855.png)
+![image-20260604112537855](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604112537855.png)
 
-在 **Web1 (131)** 或任意能连上 MySQL 主库的服务器执行：
+在 **Web1 (10.1.4.16)** 或任意能连上 MySQL 主库的服务器执行：
 
 ```
 USE wordpress;
-UPDATE wp_options SET option_value = 'http://192.168.19.130' WHERE option_name = 'siteurl';
-UPDATE wp_options SET option_value = 'http://192.168.19.130' WHERE option_name = 'home';
+UPDATE wp_options SET option_value = 'http://10.1.0.5' WHERE option_name = 'siteurl';
+UPDATE wp_options SET option_value = 'http://10.1.0.5' WHERE option_name = 'home';
 EXIT;
 ```
 
-这样流量就会通过130统一进入
+这样流量就会通过10.1.0.5统一进入
 
-![](./image-20260604111959391.png)
+![image-20260604111959391](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604111959391.png)
 
 # 第二部分
 
@@ -454,11 +454,11 @@ EXIT;
 
 | 节点                | IP             | 角色                                 |
 | ------------------- | -------------- | ------------------------------------ |
-| **LB (反向代理)**   | 192.168.19.130 | Nginx 反向代理 → 仅转发给 Web1 (131) |
-| **Web1 (被测节点)** | 192.168.19.131 | LNMP + WordPress（目标服务）         |
-| **Web2 (压测节点)** | 192.168.19.133 | 压测工具 + 数据采集                  |
+| **LB (反向代理)**   | 10.1.0.5 | Nginx 反向代理 → 仅转发给 Web1 (10.1.4.16) |
+| **Web1 (被测节点)** | 10.1.4.16 | LNMP + WordPress（目标服务）         |
+| **Web2 (压测节点)** | 10.1.4.5 | 压测工具 + 数据采集                  |
 
-### 第一阶段：Web2 (133) 改造为压测节点
+### 第一阶段：Web2 (10.1.4.5) 改造为压测节点
 
 #### 1. 停止 Web2 上的 LNMP 相关服务（释放资源）
 
@@ -469,7 +469,7 @@ systemctl disable nginx php-fpm mysqld
 
 # 卸载 NFS（可选，释放资源）
 umount /data/wordpress
-sed -i '/192.168.19.131/d' /etc/fstab
+sed -i '/10.1.4.16/d' /etc/fstab
 ```
 
 #### 2. 安装压测工具集
@@ -509,9 +509,9 @@ cd /opt/benchmark
 ```
 cat > /opt/benchmark/wrk_test.sh <<'EOF'
 #!/bin/bash
-# wrk 压测脚本 - 测试 LB 130 反向代理 Web1 的性能
+# wrk 压测脚本 - 测试 LB  反向代理 Web1 的性能
 
-TARGET="http://192.168.19.130"
+TARGET="http://10.1.0.5"
 DURATION=60
 CONNECTIONS=(100 500 1000 2000 5000)
 THREADS=4
@@ -538,7 +538,7 @@ cat > /opt/benchmark/wrk_stress.sh <<'EOF'
 #!/bin/bash
 # 持续高压测试，专门用于暴露 TIME_WAIT 耗尽和 502 问题
 
-TARGET="http://192.168.19.130"
+TARGET="http://10.1.0.5"
 DURATION=120
 CONNECTIONS=10000
 THREADS=8
@@ -555,7 +555,7 @@ chmod +x /opt/benchmark/wrk_stress.sh
 ```
 cat > /opt/benchmark/monitor_502.sh <<'EOF'
 #!/bin/bash
-TARGET="http://192.168.19.130"
+TARGET="http://10.1.0.5"
 echo "Time,Total_Requests,502_Count,502_Rate(%),Avg_Latency(ms)" > /opt/benchmark/502_monitor.csv
 
 while true; do
@@ -630,7 +630,7 @@ chmod +x /opt/benchmark/collect_conn.sh
 
 这是**基准测试配置**，不做任何 upstream 长连接和内核优化，用于暴露问题。
 
-#### 1. LB (130) 优化前 Nginx 配置
+#### 1. LB (10.1.0.5) 优化前 Nginx 配置
 
 ```
 cat > /etc/nginx/nginx.conf <<'EOF'
@@ -666,7 +666,7 @@ http {
 
     # === 优化前：短连接，无 keepalive ===
     upstream web1_backend {
-        server 192.168.19.131:80 weight=1 max_fails=3 fail_timeout=30s;
+        server 10.1.4.16:80 weight=1 max_fails=3 fail_timeout=30s;
         # 没有 keepalive 指令
     }
 
@@ -711,7 +711,7 @@ sysctl -a | grep -E "tcp_tw|file_max|somaxconn|ip_local_port_range" > /opt/bench
 
 ### 第三阶段：优化后配置（LB 130 — 长连接 + 内核优化，暂时不配置，未优化压测后进行）
 
-#### 1. LB (130) 优化后 Nginx 配置
+#### 1. LB (10.1.0.5) 优化后 Nginx 配置
 
 ```
 cat > /etc/nginx/nginx.conf <<'EOF'
@@ -747,7 +747,7 @@ http {
 
     # === 优化后：开启 upstream 长连接 ===
     upstream web1_backend {
-        server 192.168.19.131:80 weight=1 max_fails=3 fail_timeout=30s;
+        server 10.1.4.16:80 weight=1 max_fails=3 fail_timeout=30s;
         keepalive 512;          # 保持 512 个空闲长连接
         keepalive_requests 1000; # 单个连接最多处理 1000 请求
         keepalive_timeout 60s;  # 空闲连接超时
@@ -910,17 +910,17 @@ cp /opt/benchmark/conn_status.csv /opt/benchmark/after/
 
 ### 优化前
 
-![](./image-20260605145822159.png)
+![](C:\Users\Admin\Pictures\Screenshots\屏幕截图 2026-06-05 145338.png)
 
 
 
 !(C:\Users\Admin\Pictures\Screenshots\屏幕截图 2026-06-03 130441.png)
 
-![](./image-20260605145845068.png)
+![](C:\Users\Admin\Pictures\Screenshots\屏幕截图 2026-06-05 145348.png)
 
 ### 优化后
 
-![](./image-20260605151217100.png)
+![image-20260605151217100](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605151217100.png)
 
 | 指标            | 优化前（100 conn） | 优化后（100 conn） | 优化前（500 conn）    | 优化后（500 conn）  |
 | --------------- | ------------------ | ------------------ | --------------------- | ------------------- |
@@ -933,7 +933,7 @@ cp /opt/benchmark/conn_status.csv /opt/benchmark/after/
 | **Avg Latency** | 1.75s              | 1.74s              | 1.15s                 | 1.15s               |
 | **P50 Latency** | 1.78s              | 1.77s              | 1.27s                 | 1.25s               |
 
-![](./image-20260605151252531.png)
+![image-20260605151252531](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605151252531.png)
 
 | 指标                  | 优化前（短连接）           | 优化后（长连接+内核优化） | 改善幅度     |
 | --------------------- | -------------------------- | ------------------------- | ------------ |
@@ -969,19 +969,19 @@ cd /opt/benchmark
 
 ### 优化前
 
-![](./image-20260605145822159.png)
+![image-20260605145822159](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605145822159.png)
 
-![](./image-20260605145845068.png)
+![image-20260605145845068](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605145845068.png)
 
-![](./image-20260605145854205.png)
+![image-20260605145854205](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605145854205.png)
 
 ### 优化后
 
-![](./image-20260605152102972.png)
+![image-20260605152102972](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605152102972.png)
 
-![](./image-20260605152113972.png)
+![image-20260605152113972](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605152113972.png)
 
-![](./image-20260605152123643.png)
+![image-20260605152123643](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605152123643.png)
 
 ### 一、502 / 非 2xx 错误对比
 
@@ -1177,9 +1177,9 @@ TIME_WAIT: 1      → 逐渐堆积到 1997
 
 | 主机名 | IP             | 角色                      |
 | ------ | -------------- | ------------------------- |
-| db-130 | 192.168.19.130 | 主库（Primary）+ Router   |
-| db-131 | 192.168.19.131 | 从库（Secondary）+ Router |
-| db-133 | 192.168.19.133 | 从库（Secondary）+ Router |
+| db-10.1.0.5 | 10.1.0.5 | 主库（Primary）+ Router   |
+| db-10.1.4.16 | 10.1.4.16 | 从库（Secondary）+ Router |
+| db-10.1.4.5 | 10.1.4.5 | 从库（Secondary）+ Router |
 
 ### 第一步：系统初始化（三台都执行）
 
@@ -1197,9 +1197,9 @@ hostnamectl set-hostname db133   # 在 133 执行
 # 3. 配置 hosts（三台都执行）
 cat > /etc/hosts << 'EOF'
 127.0.0.1   localhost localhost.localdomain
-192.168.19.130 db130
-192.168.19.131 db131
-192.168.19.133 db133
+10.1.0.5 db130
+10.1.4.16 db131
+10.1.4.5 db133
 EOF
 
 # 4. 时间同步
@@ -1217,7 +1217,7 @@ systemctl enable --now mysqld
 
 ### 第三步：MySQL 配置文件（三台分别配置）
 
-**192.168.19.130** 的 `/etc/my.cnf`
+**10.1.0.5** 的 `/etc/my.cnf`
 
 ```
 [mysqld]
@@ -1246,7 +1246,7 @@ transaction_write_set_extraction = XXHASH64
 binlog_transaction_dependency_tracking = WRITESET
 ```
 
-**192.168.19.131** 的 `/etc/my.cnf`（仅 `server_id` 和 `local_address` 不同）：
+**10.1.4.16** 的 `/etc/my.cnf`（仅 `server_id` 和 `local_address` 不同）：
 
 ```
 [mysqld]
@@ -1273,7 +1273,7 @@ transaction_write_set_extraction = XXHASH64
 binlog_transaction_dependency_tracking = WRITESET
 ```
 
-**192.168.19.133** 的 `/etc/my.cnf`：
+**10.1.4.5** 的 `/etc/my.cnf`：
 
 ```
 [mysqld]
@@ -1339,13 +1339,13 @@ cluster.addInstance('ic_admin@db133:3306', {recoveryMethod: 'clone', password: '
 cluster.status();
 ```
 
-![](./image-20260606123917276.png)
+![image-20260606123917276](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606123917276.png)
 
-![](./image-20260606123926741.png)
+![image-20260606123926741](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606123926741.png)
 
 `cluster.status()` 正常输出应类似：
 
-![](./image-20260606123947266.png)
+![image-20260606123947266](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606123947266.png)
 
 ### 第六步：部署 MySQL Router（三台都执行）
 
@@ -1365,14 +1365,14 @@ mysqlrouter --bootstrap ic_admin@db130:3306 \
 /etc/mysqlrouter/start.sh
 ```
 
-![](./image-20260606124334620.png)
+![image-20260606124334620](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124334620.png)
 
 | 端口   | 用途                         |
 | ------ | ---------------------------- |
 | `6446` | 读写（始终指向 Primary）     |
 | `6447` | 只读（负载均衡到 Secondary） |
 
-![](./image-20260606124433060.png)
+![image-20260606124433060](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124433060.png)
 
 ### 第七步：应用连接方式
 
@@ -1384,7 +1384,7 @@ jdbc:mysql://localhost:6446/mydb?user=app&password=xxx
 jdbc:mysql://localhost:6447/mydb?user=app&password=xxx
 ```
 
-如果应用部署在独立服务器上（非数据库节点），则连接任意一台数据库节点的 `6446/6447` 即可，例如 `192.168.19.130:6446`。
+如果应用部署在独立服务器上（非数据库节点），则连接任意一台数据库节点的 `6446/6447` 即可，例如 `10.1.0.5:6446`。
 
 ### 第八步：故障转移验证
 
@@ -1410,11 +1410,11 @@ cluster.status();
 - `db130:3306` 状态变为 `MISSING`
 - `db131:3306` 或 `db133:3306` 被自动提升为新的 `PRIMARY`
 
-![](./image-20260606124715241.png)
+![image-20260606124715241](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124715241.png)
 
 应用通过 `localhost:6446` 的连接会自动路由到新主库，**无需任何人工干预和配置变更**。
 
-130 修复后重新加入集群：
+10.1.0.5 修复后重新加入集群：
 
 ```
 # 在 130 上
@@ -1424,7 +1424,7 @@ systemctl start mysqld
 cluster.rejoinInstance('ic_admin@db130:3306');
 ```
 
-![](./image-20260606124832515.png)
+![image-20260606124832515](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124832515.png)
 
 可以看到自动变成secondary从库
 
@@ -1870,11 +1870,11 @@ main "$@"
 chmod +x /usr/local/bin/mysql_hot_backup.sh
 ```
 
-![](./image-20260607114826574.png)
+![image-20260607114826574](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260607114826574.png)
 
-![](./image-20260607120423748.png)
+![image-20260607120423748](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260607120423748.png)
 
-![](./image-20260607120443348.png)
+![image-20260607120443348](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260607120443348.png)
 
 #### 三、定时配置（Crontab）
 
@@ -1919,11 +1919,11 @@ mysqlbinlog \
 
 | 节点     | IP             | 角色                                                         |
 | :------- | :------------- | :----------------------------------------------------------- |
-| **LB**   | 192.168.19.129 | Nginx **负载均衡** + **Loki + Grafana 服务端**               |
-| **Web1** | 192.168.19.132 | LNMP + WordPress + MySQL 主 + NFS 服务端 + **Promtail 采集** |
+| **LB**   | 10.1.0.5 | Nginx **负载均衡** + **Loki + Grafana 服务端**               |
+| **Web1** | 10.1.4.16 | LNMP + WordPress + MySQL 主 + NFS 服务端 + **Promtail 采集** |
 | **Web2** | 192.168.19.133 | LNMP + WordPress + MySQL 从 + NFS 客户端 + **Promtail 采集** |
 
-#### 一、LB 节点部署 Loki + Grafana（192.168.19.129）
+#### 一、LB 节点部署 Loki + Grafana（10.1.0.5）
 
 ##### 1. 添加 Grafana 仓库并安装
 
@@ -2057,9 +2057,9 @@ EOF
 curl -s http://localhost:3100/ready
 ```
 
-#### 二、Web1/Web2 部署 Promtail（192.168.19.132 / 192.168.19.133）
+#### 二、Web1/Web2 部署 Promtail（10.1.4.16 / 192.168.19.133）
 
-### 192.168.19.132
+### 10.1.4.16
 
 #### 1. 安装 Promtail
 
@@ -2093,7 +2093,7 @@ positions:
   filename: /var/lib/promtail/positions.yaml
 
 clients:
-  - url: http://192.168.19.129:3100/loki/api/v1/push
+  - url: http://10.1.0.5:3100/loki/api/v1/push
 
 scrape_configs:
   # Nginx 访问日志（JSON 格式）
@@ -2199,7 +2199,7 @@ positions:
   filename: /var/lib/promtail/positions.yaml
 
 clients:
-  - url: http://192.168.19.129:3100/loki/api/v1/push
+  - url: http://10.1.0.5:3100/loki/api/v1/push
 
 scrape_configs:
   - job_name: nginx_access
@@ -2370,7 +2370,7 @@ sudo chmod 644 /data/wordpress/wp-content/debug.log
 
 ### 1. 访问 Grafana
 
-浏览器打开 `http://192.168.19.129:3000`，默认账号 `admin/admin`
+浏览器打开 `http://10.1.0.5:3000`，默认账号 `admin/admin`
 
 ### 2. 添加 Loki 数据源
 
@@ -2410,7 +2410,7 @@ sum(rate({job="nginx", log_type="access"} | json | status="5.."[1m])) by (host)
 {job="php_fpm"} |= "slow"
 ```
 
-![](./image-20260610110541844.png)
+![image-20260610110541844](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260610110541844.png)
 
 ## 第六部分
 
@@ -2418,11 +2418,11 @@ sum(rate({job="nginx", log_type="access"} | json | status="5.."[1m])) by (host)
 
 | 节点     | IP             | Zabbix 角色           | 监控内容                               |
 | :------- | :------------- | :-------------------- | :------------------------------------- |
-| **LB**   | 192.168.19.129 | Zabbix Server + Agent | Nginx 活动连接、系统指标               |
-| **Web1** | 192.168.19.132 | Zabbix Agent          | Nginx、MySQL 主库、WordPress、系统指标 |
+| **LB**   | 10.1.0.5 | Zabbix Server + Agent | Nginx 活动连接、系统指标               |
+| **Web1** | 10.1.4.16 | Zabbix Agent          | Nginx、MySQL 主库、WordPress、系统指标 |
 | **Web2** | 192.168.19.133 | Zabbix Agent          | Nginx、MySQL 从库、WordPress、系统指标 |
 
-#### 一、Zabbix Server 部署（LB 节点 192.168.19.129）
+#### 一、Zabbix Server 部署（LB 节点 10.1.0.5）
 
 ##### 1. 安装 Zabbix 仓库
 
@@ -2528,11 +2528,11 @@ sudo firewall-cmd --reload
 
 ##### 7. 访问 Zabbix Web 完成初始化
 
-浏览器打开 `http://192.168.19.129:8080`
+浏览器打开 `http://10.1.0.5:8080`
 
 默认登录：`Admin` / `zabbix`
 
-![](./image-20260612100104899.png)
+![image-20260612100104899](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260612100104899.png)
 
 #### 二、Web1/Web2 部署 Zabbix Agent
 
@@ -2547,15 +2547,15 @@ sudo dnf install -y zabbix-agent2
 
 ##### 2. 配置 Agent
 
-**Web1 (192.168.19.132)**：
+**Web1 (10.1.4.16)**：
 
 ```
 sudo tee /etc/zabbix/zabbix_agent2.conf <<'EOF'
 PidFile=/run/zabbix/zabbix_agent2.pid
 LogFile=/var/log/zabbix/zabbix_agent2.log
 LogFileSize=0
-Server=192.168.19.129
-ServerActive=192.168.19.129
+Server=10.1.0.5
+ServerActive=10.1.0.5
 Hostname=web1-server
 Include=/etc/zabbix/zabbix_agent2.d/*.conf
 UnsafeUserParameters=1
@@ -2570,8 +2570,8 @@ sudo tee /etc/zabbix/zabbix_agent2.conf <<'EOF'
 PidFile=/run/zabbix/zabbix_agent2.pid
 LogFile=/var/log/zabbix/zabbix_agent2.log
 LogFileSize=0
-Server=192.168.19.129
-ServerActive=192.168.19.129
+Server=10.1.0.5
+ServerActive=10.1.0.5
 Hostname=web2-server
 Include=/etc/zabbix/zabbix_agent2.d/*.conf
 UnsafeUserParameters=1
@@ -2679,12 +2679,12 @@ sudo systemctl restart zabbix-agent2
 sudo dnf install -y zabbix-get
 
 # 测试获取数据
-zabbix_get -s 192.168.19.132 -k nginx.active
-zabbix_get -s 192.168.19.132 -k nginx.reading
+zabbix_get -s 10.1.4.16 -k nginx.active
+zabbix_get -s 10.1.4.16 -k nginx.reading
 zabbix_get -s 192.168.19.133 -k nginx.active
 ```
 
-![](./image-20260612100051541.png)
+![image-20260612100051541](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260612100051541.png)
 
 #### 四、MySQL 主从延迟监控（自定义脚本）
 
@@ -2747,7 +2747,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_delay
 zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 ```
 
-![](./image-20260612101618680.png)
+![image-20260612101618680](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260612101618680.png)
 
 #### 五、Zabbix Web 配置监控项和触发器
 
@@ -2757,8 +2757,8 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 
 | 主机名      | 可见名称    | 群组          | Agent 接口           |
 | :---------- | :---------- | :------------ | :------------------- |
-| lb-server   | LB 负载均衡 | Linux servers | 192.168.19.129:10050 |
-| web1-server | Web1 主库   | Linux servers | 192.168.19.132:10050 |
+| lb-server   | LB 负载均衡 | Linux servers | 10.1.0.5:10050 |
+| web1-server | Web1 主库   | Linux servers | 10.1.4.16:10050 |
 | web2-server | Web2 从库   | Linux servers | 192.168.19.133:10050 |
 
 模板选择：** Linux by Zabbix agent**
@@ -2821,7 +2821,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 - **lb-server / web1-server / web2-server**：绑定 `Template App Nginx Status`
 - **web2-server**：额外绑定 `Template MySQL Replication`
 
-![](./image-20260613104634153.png)
+![image-20260613104634153](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613104634153.png)
 
 #### 六、配置告警通知
 
@@ -2870,7 +2870,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 
 - 发送恢复消息给用户组：Zabbix administrators
 
-![](./image-20260613110006195.png)
+![image-20260613110006195](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613110006195.png)
 
 #### 七、验证监控效果
 
@@ -2880,7 +2880,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 
 选择主机，查看 Nginx 和 MySQL 监控项的实时值。
 
-![](./image-20260613110039808.png)
+![image-20260613110039808](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613110039808.png)
 
 #### 2. 模拟告警测试
 
@@ -2896,4 +2896,4 @@ sudo mysql -uroot -p -e "START SLAVE SQL_THREAD;"
 
 ![image-20260613111538788](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613111538788.png)
 
-![](./image-20260613111450088.png)
+![image-20260613111450088](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613111450088.png)
