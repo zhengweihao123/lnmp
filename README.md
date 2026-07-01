@@ -1,5 +1,7 @@
 ## *腾讯云LNMP 高可用架构与自动化运维*
 
+### 图片是我之前在本地虚拟机内截图的，云上操作基本一致所以就不重新截图了
+
 # 第一部分
 
 ### 第一阶段：基础环境准备（三台服务器都执行)
@@ -12,11 +14,11 @@ setenforce 0
 sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
 
 # 配置主机名
-# 在 130 执行：
+# 在 10.1.0.5 执行：
 hostnamectl set-hostname lb-server
-# 在 131 执行：
+# 在 10.1.4.16 执行：
 hostnamectl set-hostname web1-server
-# 在 133 执行：
+# 在 10.1.4.5 执行：
 hostnamectl set-hostname web2-server
 
 # 配置 hosts（三台都执行）
@@ -124,7 +126,7 @@ mysql -u root -p -e "SHOW MASTER STATUS;"
 # 记录 File 和 Position，Web2 配置从库时需要用到
 ```
 
-![image-20260604110351143](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110351143.png)
+![image-20260604110351143](image-20260604110351143.png)
 
 #### 3. 安装 LNMP 环境
 
@@ -225,7 +227,7 @@ nginx -t
 systemctl restart nginx
 ```
 
-![image-20260604110454615](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110454615.png)
+![image-20260604110454615](image-20260604110454615.png)
 
 ### 第三阶段：Web2 (10.1.4.5) 部署 — NFS Client + DB Slave + LNMP
 
@@ -247,7 +249,7 @@ mount -a
 df -h | grep wordpress
 ```
 
-![image-20260604110639132](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110639132.png)
+![image-20260604110639132](image-20260604110639132.png)
 
 #### 2. 安装 MySQL 8.0 (从库)
 
@@ -290,7 +292,7 @@ SHOW SLAVE STATUS\G
 EXIT;
 ```
 
-![image-20260604110938011](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604110938011.png)
+![image-20260604110938011](image-20260604110938011.png)
 
 #### 3. 安装 LNMP 环境（与 Web1 相同）
 
@@ -433,7 +435,7 @@ mysql -u root -p -e "USE wordpress; SHOW TABLES;"
 mysql -u root -p -e "SHOW SLAVE STATUS\G" | grep "Running"
 ```
 
-![image-20260604112537855](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604112537855.png)
+![image-20260604112537855](image-20260604112537855.png)
 
 在 **Web1 (10.1.4.16)** 或任意能连上 MySQL 主库的服务器执行：
 
@@ -446,7 +448,7 @@ EXIT;
 
 这样流量就会通过10.1.0.5统一进入
 
-![image-20260604111959391](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260604111959391.png)
+![image-20260604111959391](image-20260604111959391.png)
 
 # 第二部分
 
@@ -626,7 +628,7 @@ EOF
 chmod +x /opt/benchmark/collect_conn.sh
 ```
 
-### 第二阶段：优化前配置（LB 130 — 短连接模式）
+### 第二阶段：优化前配置（LB 10.1.0.5 — 短连接模式）
 
 这是**基准测试配置**，不做任何 upstream 长连接和内核优化，用于暴露问题。
 
@@ -709,7 +711,7 @@ systemctl restart nginx
 sysctl -a | grep -E "tcp_tw|file_max|somaxconn|ip_local_port_range" > /opt/benchmark/sysctl_before.conf
 ```
 
-### 第三阶段：优化后配置（LB 130 — 长连接 + 内核优化，暂时不配置，未优化压测后进行）
+### 第三阶段：优化后配置（LB 10.1.0.5 — 长连接 + 内核优化，暂时不配置，未优化压测后进行）
 
 #### 1. LB (10.1.0.5) 优化后 Nginx 配置
 
@@ -874,7 +876,7 @@ cd /opt/benchmark
 
 ```
 # === 优化前测试 ===
-# 1. 确保 LB 130 使用优化前配置
+# 1. 确保 LB 10.1.0.5 使用优化前配置
 # 2. 在 Web2 执行：
 cd /opt/benchmark
 ./wrk_test.sh
@@ -891,7 +893,7 @@ cp /opt/benchmark/conn_status.csv /opt/benchmark/before/
 
 ```
 # === 优化后测试 ===
-# 1. 在 LB 130 切换到优化后配置并重启 nginx
+# 1. 在 LB 10.1.0.5 切换到优化后配置并重启 nginx
 # 2. 在 Web2 重新清空日志后执行：
 cd /opt/benchmark
 > /opt/benchmark/wrk_result.log
@@ -920,7 +922,7 @@ cp /opt/benchmark/conn_status.csv /opt/benchmark/after/
 
 ### 优化后
 
-![image-20260605151217100](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605151217100.png)
+![image-20260605151217100](image-20260605151217100.png)
 
 | 指标            | 优化前（100 conn） | 优化后（100 conn） | 优化前（500 conn）    | 优化后（500 conn）  |
 | --------------- | ------------------ | ------------------ | --------------------- | ------------------- |
@@ -933,7 +935,7 @@ cp /opt/benchmark/conn_status.csv /opt/benchmark/after/
 | **Avg Latency** | 1.75s              | 1.74s              | 1.15s                 | 1.15s               |
 | **P50 Latency** | 1.78s              | 1.77s              | 1.27s                 | 1.25s               |
 
-![image-20260605151252531](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605151252531.png)
+![image-20260605151252531](image-20260605151252531.png)
 
 | 指标                  | 优化前（短连接）           | 优化后（长连接+内核优化） | 改善幅度     |
 | --------------------- | -------------------------- | ------------------------- | ------------ |
@@ -969,19 +971,19 @@ cd /opt/benchmark
 
 ### 优化前
 
-![image-20260605145822159](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605145822159.png)
+![image-20260605145822159](image-20260605145822159.png)
 
-![image-20260605145845068](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605145845068.png)
+![image-20260605145845068](image-20260605145845068.png)
 
-![image-20260605145854205](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605145854205.png)
+![image-20260605145854205](image-20260605145854205.png)
 
 ### 优化后
 
-![image-20260605152102972](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605152102972.png)
+![image-20260605152102972](image-20260605152102972.png)
 
-![image-20260605152113972](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605152113972.png)
+![image-20260605152113972](image-20260605152113972.png)
 
-![image-20260605152123643](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260605152123643.png)
+![image-20260605152123643](image-20260605152123643.png)
 
 ### 一、502 / 非 2xx 错误对比
 
@@ -1190,9 +1192,9 @@ setenforce 0
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 
 # 2. 设置主机名（分别在对应机器执行）
-hostnamectl set-hostname db130   # 在 130 执行
-hostnamectl set-hostname db131   # 在 131 执行
-hostnamectl set-hostname db133   # 在 133 执行
+hostnamectl set-hostname db130   # 在 10.1.0.5 执行
+hostnamectl set-hostname db131   # 在 10.1.4.16 执行
+hostnamectl set-hostname db133   # 在 10.1.4.5 执行
 
 # 3. 配置 hosts（三台都执行）
 cat > /etc/hosts << 'EOF'
@@ -1313,7 +1315,7 @@ FLUSH PRIVILEGES;
 SET SQL_LOG_BIN=1;
 ```
 
-### 第五步：使用 MySQL Shell 组建集群（在 130 上执行）
+### 第五步：使用 MySQL Shell 组建集群（在 10.1.0.5 上执行）
 
 ```
 mysqlsh --uri ic_admin@db130:3306
@@ -1329,23 +1331,23 @@ dba.configureInstance('ic_admin@db133:3306', {clusterAdmin: 'ic_admin', password
 \connect ic_admin@db130:3306
 var cluster = dba.createCluster('prodCluster');
 
-// 3. 添加 131（使用 Clone 自动同步数据）
+// 3. 添加 10.1.4.16（使用 Clone 自动同步数据）
 cluster.addInstance('ic_admin@db131:3306', {recoveryMethod: 'clone', password: 'IcAdmin@123456'});
 
-// 4. 添加 133
+// 4. 添加 10.1.4.5
 cluster.addInstance('ic_admin@db133:3306', {recoveryMethod: 'clone', password: 'IcAdmin@123456'});
 
 // 5. 查看集群状态
 cluster.status();
 ```
 
-![image-20260606123917276](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606123917276.png)
+![image-20260606123917276](image-20260606123917276.png)
 
-![image-20260606123926741](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606123926741.png)
+![image-20260606123926741](image-20260606123926741.png)
 
 `cluster.status()` 正常输出应类似：
 
-![image-20260606123947266](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606123947266.png)
+![image-20260606123947266](image-20260606123947266.png)
 
 ### 第六步：部署 MySQL Router（三台都执行）
 
@@ -1355,7 +1357,7 @@ cluster.status();
 # 安装
 dnf install -y mysql-router
 
-# 引导配置（指向集群中任意一个在线节点，这里指向 130）
+# 引导配置（指向集群中任意一个在线节点，这里指向 10.1.0.5）
 mysqlrouter --bootstrap ic_admin@db130:3306 \
   --directory /etc/mysqlrouter \
   --user=root \
@@ -1365,14 +1367,14 @@ mysqlrouter --bootstrap ic_admin@db130:3306 \
 /etc/mysqlrouter/start.sh
 ```
 
-![image-20260606124334620](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124334620.png)
+![image-20260606124334620](image-20260606124334620.png)
 
 | 端口   | 用途                         |
 | ------ | ---------------------------- |
 | `6446` | 读写（始终指向 Primary）     |
 | `6447` | 只读（负载均衡到 Secondary） |
 
-![image-20260606124433060](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124433060.png)
+![image-20260606124433060](image-20260606124433060.png)
 
 ### 第七步：应用连接方式
 
@@ -1380,7 +1382,7 @@ mysqlrouter --bootstrap ic_admin@db130:3306 \
 # 写操作（自动路由到 Primary）
 jdbc:mysql://localhost:6446/mydb?user=app&password=xxx
 
-# 读操作（自动负载到 131/133）
+# 读操作（自动负载到 10.1.4.16/10.1.4.5）
 jdbc:mysql://localhost:6447/mydb?user=app&password=xxx
 ```
 
@@ -1388,13 +1390,13 @@ jdbc:mysql://localhost:6447/mydb?user=app&password=xxx
 
 ### 第八步：故障转移验证
 
-在 **130（当前 Primary）** 模拟宕机：
+在 **10.1.0.5（当前 Primary）** 模拟宕机：
 
 ```
 systemctl stop mysqld
 ```
 
-在 **131 或 133** 进入 mysqlsh 查看：
+在 **10.1.4.16 或 10.1.4.5** 进入 mysqlsh 查看：
 
 ```
 mysqlsh --uri ic_admin@db131:3306
@@ -1410,21 +1412,21 @@ cluster.status();
 - `db130:3306` 状态变为 `MISSING`
 - `db131:3306` 或 `db133:3306` 被自动提升为新的 `PRIMARY`
 
-![image-20260606124715241](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124715241.png)
+![image-20260606124715241](image-20260606124715241.png)
 
 应用通过 `localhost:6446` 的连接会自动路由到新主库，**无需任何人工干预和配置变更**。
 
 10.1.0.5 修复后重新加入集群：
 
 ```
-# 在 130 上
+# 在 10.1.0.5 上
 systemctl start mysqld
 
-# 在 131 或 133 的 mysqlsh 中
+# 在 10.1.4.16 或 10.1.4.5 的 mysqlsh 中
 cluster.rejoinInstance('ic_admin@db130:3306');
 ```
 
-![image-20260606124832515](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260606124832515.png)
+![image-20260606124832515](image-20260606124832515.png)
 
 可以看到自动变成secondary从库
 
@@ -1870,11 +1872,11 @@ main "$@"
 chmod +x /usr/local/bin/mysql_hot_backup.sh
 ```
 
-![image-20260607114826574](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260607114826574.png)
+![image-20260607114826574](image-20260607114826574.png)
 
-![image-20260607120423748](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260607120423748.png)
+![image-20260607120423748](image-20260607120423748.png)
 
-![image-20260607120443348](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260607120443348.png)
+![image-20260607120443348](image-20260607120443348.png)
 
 #### 三、定时配置（Crontab）
 
@@ -2410,7 +2412,7 @@ sum(rate({job="nginx", log_type="access"} | json | status="5.."[1m])) by (host)
 {job="php_fpm"} |= "slow"
 ```
 
-![image-20260610110541844](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260610110541844.png)
+![image-20260610110541844](image-20260610110541844.png)
 
 ## 第六部分
 
@@ -2532,7 +2534,7 @@ sudo firewall-cmd --reload
 
 默认登录：`Admin` / `zabbix`
 
-![image-20260612100104899](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260612100104899.png)
+![image-20260612100104899](image-20260612100104899.png)
 
 #### 二、Web1/Web2 部署 Zabbix Agent
 
@@ -2684,7 +2686,7 @@ zabbix_get -s 10.1.4.16 -k nginx.reading
 zabbix_get -s 192.168.19.133 -k nginx.active
 ```
 
-![image-20260612100051541](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260612100051541.png)
+![image-20260612100051541](image-20260612100051541.png)
 
 #### 四、MySQL 主从延迟监控（自定义脚本）
 
@@ -2747,7 +2749,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_delay
 zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 ```
 
-![image-20260612101618680](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260612101618680.png)
+![image-20260612101618680](image-20260612101618680.png)
 
 #### 五、Zabbix Web 配置监控项和触发器
 
@@ -2821,7 +2823,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 - **lb-server / web1-server / web2-server**：绑定 `Template App Nginx Status`
 - **web2-server**：额外绑定 `Template MySQL Replication`
 
-![image-20260613104634153](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613104634153.png)
+![image-20260613104634153](image-20260613104634153.png)
 
 #### 六、配置告警通知
 
@@ -2870,7 +2872,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 
 - 发送恢复消息给用户组：Zabbix administrators
 
-![image-20260613110006195](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613110006195.png)
+![image-20260613110006195](image-20260613110006195.png)
 
 #### 七、验证监控效果
 
@@ -2880,7 +2882,7 @@ zabbix_get -s 192.168.19.133 -k mysql.slave_io_running
 
 选择主机，查看 Nginx 和 MySQL 监控项的实时值。
 
-![image-20260613110039808](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613110039808.png)
+![image-20260613110039808](image-20260613110039808.png)
 
 #### 2. 模拟告警测试
 
@@ -2894,6 +2896,6 @@ sudo mysql -uroot -p -e "STOP SLAVE SQL_THREAD;"
 sudo mysql -uroot -p -e "START SLAVE SQL_THREAD;"
 ```
 
-![image-20260613111538788](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613111538788.png)
+![image-20260613111538788](image-20260613111538788.png)
 
-![image-20260613111450088](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20260613111450088.png)
+![image-20260613111450088](image-20260613111450088.png)
